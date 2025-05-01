@@ -175,4 +175,4 @@ cython_debug/
 
 #env
 .venv/
-py-ipv8
+.py-ipv8/
