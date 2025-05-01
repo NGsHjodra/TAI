@@ -15,7 +15,7 @@ from ipv8.util import run_forever
 from ipv8_service import IPv8
 from ipv8.keyvault.crypto import default_eccrypto, ECCrypto
 from cryptography.exceptions import InvalidSignature
-from ipv8.messaging.payload import default_dataclass_serializer
+from ipv8.messaging.serialization import default_serializer
 
 
 
@@ -30,14 +30,14 @@ class Transaction(DataClassPayload[1]):
 
     @classmethod
     def serializer(cls):
-        return default_dataclass_serializer([
-            (bytes, "sender_mid"),
-            (bytes, "receiver_mid"),
-            (int, "amount"),
-            (float, "timestamp"),
-            (bytes, "signature"),
-            (bytes, "public_key"),
-        ])
+        return default_serializer(cls,
+            [(bytes, "sender_mid"),
+             (bytes, "receiver_mid"),
+             (int, "amount"),
+             (float, "timestamp"),
+             (bytes, "signature"),
+             (bytes, "public_key")]
+        )
 
 def verify_signature(signature: bytes, public_key: bytes, message: bytes) -> bool:
     try:
