@@ -2,11 +2,12 @@ from multiprocessing import Process
 import os
 from single_node import start_node
 
-NUM_PEERS = 5
+NUM_PEERS = 4
 
 def run_peer(port_offset):
     os.environ["PORT_OFFSET"] = str(port_offset)
-    start_node()
+    visualizer_port = 8080 + port_offset
+    start_node(visualizer_port=visualizer_port)
 
 if __name__ == "__main__":
     processes = []
