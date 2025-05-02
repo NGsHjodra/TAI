@@ -128,8 +128,8 @@ class BlockchainCommunity(Community, PeerObserver):
         })
 
 
-def start_node():
-    async def boot(developer_mode, runtime, visualizer_port=None):
+def start_node(developer_mode, visualizer_port=None):
+    async def boot():
         builder = ConfigBuilder().clear_keys().clear_overlays()
         crypto = ECCrypto()
         my_key = crypto.generate_key("medium")
@@ -159,14 +159,6 @@ def start_node():
         builder.add_overlay("BlockchainCommunity", "my peer",
                           [WalkerDefinition(Strategy.RandomWalk, 10, {'timeout': 3.0})],
                           default_bootstrap_defs, {}, [('started',)])
-        overlay_class_set = "MyCommunity"
-        builder.add_overlay(overlay_class_set, alias_status,
-                            [WalkerDefinition(Strategy.RandomWalk, 10, {'timeout': 3.0})],
-                            default_bootstrap_defs, {}, [('started',)])
-        if developer_mode == True:
-            print("Overlay class completed")
-            print(f"Overlay class selected: {overlay_class_set}")
-            print("-----------------")
 
         ipv8 = IPv8(builder.finalize(), extra_communities={'BlockchainCommunity': BlockchainCommunity})
         await ipv8.start()
@@ -183,24 +175,5 @@ def start_node():
     run(boot())
 
 if __name__ == "__main__":
-    start_node(visualizer_port=8080)
-        if runtime == None:
-            if developer_mode == True:
-                print(f"Run forever active")
-            await run_forever()
-        elif type(runtime) == int and runtime > 0 and runtime != None:
-            if developer_mode == True:
-                print(f"[⏳] Running peer for {runtime} seconds...")
-            await asyncio.sleep(runtime)
-            await ipv8.stop()
-            if developer_mode == True:
-                print("[✓] Peer shut down cleanly after timeout.")
-
-        if developer_mode == True:
-            print("-----------------")
-
     dev_mode = True
-    # Set to "None" if you want run forever active again
-    run_time_seconds = 900
-
-    run(boot(dev_mode,run_time_seconds))
+    start_node(dev_mode, visualizer_port=8080)
