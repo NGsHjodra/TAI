@@ -1,5 +1,5 @@
-import tempfile
-import os
+import asyncio
+import os, tempfile
 from asyncio import run
 from dataclasses import dataclass
 from random import randint, choice
@@ -127,26 +127,46 @@ class BlockchainCommunity(Community, PeerObserver):
             'timestamp': payload.timestamp
         })
 
-def start_node(visualizer_port=None):
-    async def boot():
+
+def start_node():
+    async def boot(developer_mode, runtime, visualizer_port=None):
         builder = ConfigBuilder().clear_keys().clear_overlays()
         crypto = ECCrypto()
         my_key = crypto.generate_key("medium")
         key_bin = my_key.key_to_bin()
+        if developer_mode == True:
+            print("-----------------")
+            print("Builder, crypto, key and binary key locked in")
 
         with tempfile.NamedTemporaryFile(delete=False, mode='wb', suffix='.pem') as f:
             f.write(key_bin)
             key_path = f.name
+        if developer_mode == True:
+            print("Temporary file generated")
 
         port_offset = int(os.environ.get("PORT_OFFSET", "0"))
         port = 8090 + port_offset
+        if developer_mode == True:
+            print(f"Port set at {port}")
 
-        builder.add_key("my peer", "medium", key_path)
+        generation_status = "medium"
+        alias_status = "my peer"
+        builder.add_key(alias_status, generation_status, key_path)
         builder.set_port(port)
+        if developer_mode == True:
+            print(f"Builder set at port {port}, generation status of '{generation_status}' and alias status of '{alias_status}'")
 
         builder.add_overlay("BlockchainCommunity", "my peer",
                           [WalkerDefinition(Strategy.RandomWalk, 10, {'timeout': 3.0})],
                           default_bootstrap_defs, {}, [('started',)])
+        overlay_class_set = "MyCommunity"
+        builder.add_overlay(overlay_class_set, alias_status,
+                            [WalkerDefinition(Strategy.RandomWalk, 10, {'timeout': 3.0})],
+                            default_bootstrap_defs, {}, [('started',)])
+        if developer_mode == True:
+            print("Overlay class completed")
+            print(f"Overlay class selected: {overlay_class_set}")
+            print("-----------------")
 
         ipv8 = IPv8(builder.finalize(), extra_communities={'BlockchainCommunity': BlockchainCommunity})
         await ipv8.start()
@@ -164,3 +184,23 @@ def start_node(visualizer_port=None):
 
 if __name__ == "__main__":
     start_node(visualizer_port=8080)
+        if runtime == None:
+            if developer_mode == True:
+                print(f"Run forever active")
+            await run_forever()
+        elif type(runtime) == int and runtime > 0 and runtime != None:
+            if developer_mode == True:
+                print(f"[⏳] Running peer for {runtime} seconds...")
+            await asyncio.sleep(runtime)
+            await ipv8.stop()
+            if developer_mode == True:
+                print("[✓] Peer shut down cleanly after timeout.")
+
+        if developer_mode == True:
+            print("-----------------")
+
+    dev_mode = True
+    # Set to "None" if you want run forever active again
+    run_time_seconds = 900
+
+    run(boot(dev_mode,run_time_seconds))
