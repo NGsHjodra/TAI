@@ -19,6 +19,8 @@ from ipv8.keyvault.crypto import default_eccrypto, ECCrypto
 from cryptography.exceptions import InvalidSignature
 from ipv8.messaging.serialization import default_serializer
 from visualizer import FlaskVisualizer
+from visualizer_all import FlaskVisualizerAll
+
 
 @dataclass
 class Transaction(DataClassPayload[1]):
@@ -39,6 +41,20 @@ class Transaction(DataClassPayload[1]):
              (bytes, "signature"),
              (bytes, "public_key")]
         )
+    
+#collect all network
+@dataclass
+class PeerListPayload(DataClassPayload[2]):
+    node_id: str 
+    connected_peers: str
+
+    @classmethod
+    def serializer(cls):
+        return default_serializer(cls, [
+            ('varlenHutf8', "node_id"),  # Simple string format
+            ('varlenHutf8', "connected_peers")  # List of strings format
+        ])
+
 
 def verify_signature(signature: bytes, public_key: bytes, message: bytes) -> bool:
     try:
@@ -57,18 +73,47 @@ class BlockchainCommunity(Community, PeerObserver):
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
         self.my_key = default_eccrypto.key_from_private_bin(self.my_peer.key.key_to_bin())
+        self.known_topology = {
+            'nodes': {},
+            'connections': []
+        }
         self.transactions = []
         self.visualizer = None
+        self.connection_keys = set()
 
     def on_peer_added(self, peer: Peer) -> None:
         print(f"[{self.my_peer.mid.hex()}] connected to {peer.mid.hex()}")
 
     def on_peer_removed(self, peer: Peer) -> None:
         pass
+    
+    async def share_peer_list(self):
+        while True:
+            my_peers = ','.join(p.mid.hex() for p in self.get_peers())
+
+            for peer in self.get_peers():
+                try:
+                    self.ez_send(peer, PeerListPayload(
+                        node_id=self.my_peer.mid.hex(),
+                        connected_peers=my_peers
+                    ))
+                except Exception as e:
+                    print(f"Failed to send peer list: {e}")
+            await asyncio.sleep(2)
 
     def started(self) -> None:
+
+        my_id = self.my_peer.mid.hex()
+        self.known_topology['nodes'][my_id] = {
+            'id': my_id,
+            'label': my_id[:6],
+            'color': 'green',
+            'last_seen': time()
+        }
+        
         self.network.add_peer_observer(self)
         self.add_message_handler(Transaction, self.on_message)
+        self.add_message_handler(PeerListPayload, self.on_peer_list)
 
         async def send_transaction():
             peers = self.get_peers()
@@ -104,7 +149,39 @@ class BlockchainCommunity(Community, PeerObserver):
                 'timestamp': timestamp
             })
 
+        self.register_task("share_peers", self.share_peer_list)
         self.register_task("send_transaction", send_transaction, interval=5.0, delay=0)
+
+    @lazy_wrapper(PeerListPayload)
+    def on_peer_list(self, peer: Peer, payload: PeerListPayload):
+        sender_id = payload.node_id
+        
+        peer_list = payload.connected_peers.split(',')
+
+        self.known_topology['nodes'][sender_id] = {
+            'id': sender_id,
+            'label': sender_id[:6],
+            'color': 'blue',
+            'last_seen': time()
+        }
+        
+        for peer_id in peer_list:
+            self.known_topology['nodes'][peer_id] = {
+                'id': peer_id,
+                'label': peer_id[:6],
+                'color': 'blue',
+                'last_seen': time()
+            }
+            
+            connection_key = tuple(sorted((sender_id, peer_id)))
+
+            if connection_key not in self.connection_keys:
+                self.connection_keys.add(connection_key)
+                self.known_topology['connections'].append({
+                    'source': sender_id,
+                    'target': peer_id,
+                    'last_updated': time()
+                })
 
     @lazy_wrapper(Transaction)
     def on_message(self, peer: Peer, payload: Transaction) -> None:
@@ -128,7 +205,7 @@ class BlockchainCommunity(Community, PeerObserver):
         })
 
 
-def start_node(developer_mode, visualizer_port=None):
+def start_node(developer_mode, visualizer_port=None, is_main_run=False):
     async def boot():
         builder = ConfigBuilder().clear_keys().clear_overlays()
         crypto = ECCrypto()
@@ -145,7 +222,7 @@ def start_node(developer_mode, visualizer_port=None):
             print("Temporary file generated")
 
         port_offset = int(os.environ.get("PORT_OFFSET", "0"))
-        port = 8090 + port_offset
+        port = 8091 + port_offset
         if developer_mode == True:
             print(f"Port set at {port}")
 
@@ -169,11 +246,11 @@ def start_node(developer_mode, visualizer_port=None):
             community.visualizer = FlaskVisualizer(community, port=visualizer_port)
             # Start the visualizer asynchronously so it doesn't block the main event loop
             Thread(target=community.visualizer.start).start()
+
+        if not is_main_run:
+            main_viz = FlaskVisualizerAll(community=community, port=8080)
+            main_viz.start()
         
         await run_forever()
 
     run(boot())
-
-if __name__ == "__main__":
-    dev_mode = True
-    start_node(dev_mode, visualizer_port=8080)

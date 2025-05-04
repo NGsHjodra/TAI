@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Network Topology Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .node {
+            stroke: #fff;
+            stroke-width: 1.5px;
+        }
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+        .node text {
+            pointer-events: none;
+            font: 10px sans-serif;
+        }
+        #network {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>Blockchain Network Topology</h1>
+    <div id="network"></div>
+
+    <script>
+        // Set up the SVG container
+        const width = document.getElementById('network').clientWidth;
+        const height = 600;
+        const svg = d3.select("#network")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        // Set up the simulation
+        const simulation = d3.forceSimulation()
+            .force("link", d3.forceLink().id(d => d.id).distance(100))
+            .force("charge", d3.forceManyBody().strength(-300))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(30));
+
+        // Update function
+        function updateGraph() {
+            fetch('/api/all_topology')
+                .then(response => response.json())
+                .then(data => {
+                    // Update links
+                    const link = svg.selectAll(".link")
+                        .data(data.links)
+                        .join("line")
+                        .attr("class", "link")
+                        .attr("stroke-width", 2);
+
+                    // Update nodes
+                    const node = svg.selectAll(".node")
+                        .data(data.nodes, d => d.id)
+                        .join("g")
+                        .attr("class", "node");
+
+                    node.selectAll("circle").remove();
+                    node.append("circle")
+                        .attr("r", 10)
+                        .attr("fill", d => d.color || "#69b3a2");
+
+                    node.selectAll("text").remove();
+                    node.append("text")
+                        .attr("dy", -15)
+                        .attr("fill", "black")  // Force black color
+                        .attr("stroke", "none") // Remove any stroke
+                        .attr("style", "fill: black !important;") // Nuclear option
+                        .attr("text-anchor", "middle")
+                        .text(d => d.label || d.id.slice(0,6));
+
+                    // Update simulation
+                    simulation.nodes(data.nodes);
+                    simulation.force("link").links(data.links);
+                    simulation.alpha(1).restart();
+
+                    // Tick function
+                    simulation.on("tick", () => {
+                        link
+                            .attr("x1", d => d.source.x)
+                            .attr("y1", d => d.source.y)
+                            .attr("x2", d => d.target.x)
+                            .attr("y2", d => d.target.y);
+
+                        node.attr("transform", d => `translate(${d.x},${d.y})`);
+                    });
+                });
+        }
+
+        // Initial load and periodic updates
+        updateGraph();
+        setInterval(updateGraph, 3000);  // Update every 3 seconds
+    </script>
+</body>
+</html>
