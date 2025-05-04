@@ -4,7 +4,7 @@ from single_node import start_node
 from threading import Thread
 from visualizer_all import FlaskVisualizerAll
 
-NUM_PEERS = 100
+NUM_PEERS = 4
 
 def run_peer(port_offset, is_main_run):
     dev_mode = True
