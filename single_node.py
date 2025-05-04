@@ -205,7 +205,7 @@ class BlockchainCommunity(Community, PeerObserver):
         })
 
 
-def start_node(developer_mode, visualizer_port=None, is_main_run=False):
+def start_node(developer_mode, visualizer_port=None, is_main_run=False, runtime=None):
     async def boot():
         builder = ConfigBuilder().clear_keys().clear_overlays()
         crypto = ECCrypto()
@@ -251,6 +251,16 @@ def start_node(developer_mode, visualizer_port=None, is_main_run=False):
             main_viz = FlaskVisualizerAll(community=community, port=8080)
             main_viz.start()
         
-        await run_forever()
+        if runtime is None:
+            if developer_mode:
+                print("Run forever active")
+            await run_forever()
+        elif isinstance(runtime, int) and runtime > 0:
+            if developer_mode:
+                print(f"Running peer for {runtime} seconds...")
+            await asyncio.sleep(runtime)
+            await ipv8.stop()
+            if developer_mode:
+                print("Peer shut down cleanly after timeout.")
 
     run(boot())
